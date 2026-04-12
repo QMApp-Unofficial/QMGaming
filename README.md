@@ -1,1 +1,1 @@
-# QMGaming
+# QMBOT
