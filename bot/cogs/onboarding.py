@@ -80,6 +80,13 @@ GAMES_ROLES = {
     "⚽": "FIFA",
     "🌳": "Terraria",
     "🦸": "Marvel Games",
+    "👾": "Roblox",
+}
+
+# ── Membership roles ──────────────────────────
+MEMBER_ROLES = {
+    "🏫": "Student",
+    "🌐": "External",
 }
 
 # ──────────────────────────────────────────────
@@ -144,8 +151,8 @@ class Onboarding(commands.Cog):
     @commands.has_permissions(manage_guild=True)
     async def setup(self, ctx: commands.Context):
         """
-        Creates any missing roles and posts all four onboarding embeds
-        (colour, pronouns, year, courses, games) to the configured channel.
+        Creates any missing roles and posts all onboarding embeds
+        (colour, pronouns, year, courses, games, membership) to the configured channel.
         """
         await ctx.defer(ephemeral=True)
         channel = self.bot.get_channel(ONBOARDING_CHANNEL_ID)
@@ -155,7 +162,7 @@ class Onboarding(commands.Cog):
         guild = ctx.guild
 
         # Pre-create all roles
-        all_role_maps = [COLOUR_ROLES, PRONOUN_ROLES, YEAR_ROLES, COURSE_ROLES, GAMES_ROLES]
+        all_role_maps = [COLOUR_ROLES, PRONOUN_ROLES, YEAR_ROLES, COURSE_ROLES, GAMES_ROLES, MEMBER_ROLES]
         for role_map in all_role_maps:
             for role_name in role_map.values():
                 await _get_or_create_role(guild, role_name)
@@ -166,6 +173,7 @@ class Onboarding(commands.Cog):
         await _post_reaction_embed(channel, "📅  Pick Your Year", YEAR_ROLES, discord.Colour.gold())
         await _post_reaction_embed(channel, "📖  Pick Your Course", COURSE_ROLES, discord.Colour.teal())
         await _post_reaction_embed(channel, "🎮  Pick Your Games / Channels", GAMES_ROLES, discord.Colour.green())
+        await _post_reaction_embed(channel, "👤  Student or External?", MEMBER_ROLES, discord.Colour.dark_blue())
 
         await ctx.send("✅ All onboarding embeds posted and roles created!", ephemeral=True)
 
@@ -225,6 +233,17 @@ class Onboarding(commands.Cog):
             await _get_or_create_role(ctx.guild, name)
         await _post_reaction_embed(channel, "🎮  Pick Your Games / Channels", GAMES_ROLES, discord.Colour.green())
         await ctx.send("✅ Games picker posted!", ephemeral=True)
+
+    @onboarding.command(name="members", description="Post the student / external picker embed.")
+    @commands.has_permissions(manage_guild=True)
+    async def members(self, ctx: commands.Context):
+        channel = self.bot.get_channel(ONBOARDING_CHANNEL_ID)
+        if not channel:
+            return await ctx.send("❌ `ONBOARDING_CHANNEL_ID` is not configured.", ephemeral=True)
+        for name in MEMBER_ROLES.values():
+            await _get_or_create_role(ctx.guild, name)
+        await _post_reaction_embed(channel, "👤  Student or External?", MEMBER_ROLES, discord.Colour.dark_blue())
+        await ctx.send("✅ Members picker posted!", ephemeral=True)
 
     # ──────────────────────────────────────────
     #  REACTION LISTENERS
@@ -296,6 +315,7 @@ class Onboarding(commands.Cog):
             "📅  Pick Your Year":               YEAR_ROLES,
             "📖  Pick Your Course":             COURSE_ROLES,
             "🎮  Pick Your Games / Channels":   GAMES_ROLES,
+            "👤  Student or External?":         MEMBER_ROLES,
         }
 
         try:
