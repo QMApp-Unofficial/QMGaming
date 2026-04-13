@@ -26,6 +26,7 @@ INITIAL_EXTENSIONS = [
     "cogs.fun",
     "cogs.extras",
     "cogs.modtools",
+    "cogs.onboarding",
 ]
 
 
