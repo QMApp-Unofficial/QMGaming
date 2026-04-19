@@ -20,6 +20,10 @@ from discord.ext import commands
 
 from ui_utils import C, E, embed, error, warn, success
 
+
+CONFESSION_CHANNEL_ID = 1495471743031316531
+CONFESSION_LOG_USER_ID = 734468552903360594
+
 TENOR_API_KEY = "AIzaSyAyimkuEcdEnPs55ueys84EMt_lFe0BXKQ"
 TENOR_BASE    = "https://tenor.googleapis.com/v2/search"
 
