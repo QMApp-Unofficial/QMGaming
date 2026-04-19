@@ -11,7 +11,7 @@ from storage import load_data  # kept for potential future use
 # Constants
 # ─────────────────────────────────────────
 
-CONFESSION_CHANNEL_ID = 1493029213265985658
+CONFESSION_CHANNEL_ID = 1495471743031316531
 CONFESSION_LOG_USER_ID = 734468552903360594
 
 
