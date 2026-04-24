@@ -27,6 +27,7 @@ EMBED_COLOR = C.NEUTRAL
 # Stars
 # =========================
 STAR_REACTION_EMOJIS = {"⭐", "🌟"}
+POOP_REACTION_EMOJIS = {"💩"}
 
 # =========================
 # AFK
@@ -92,6 +93,35 @@ def _today_key() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def _fresh_reaction_meta() -> dict:
+    return {
+        "day": _today_key(),
+        "given": {}
+    }
+
+
+def _ensure_reaction_meta(data: dict, meta_key: str) -> bool:
+    changed = False
+
+    if not isinstance(data.get(meta_key), dict):
+        data[meta_key] = _fresh_reaction_meta()
+        return True
+
+    if data[meta_key].get("day") != _today_key():
+        data[meta_key] = _fresh_reaction_meta()
+        return True
+
+    if "day" not in data[meta_key]:
+        data[meta_key]["day"] = _today_key()
+        changed = True
+
+    if not isinstance(data[meta_key].get("given"), dict):
+        data[meta_key]["given"] = {}
+        changed = True
+
+    return changed
+
+
 def ensure_user_coins(user_id):
     uid = str(user_id)
     coins = load_coins()
@@ -101,6 +131,7 @@ def ensure_user_coins(user_id):
             "wallet": 100,
             "bank": 0,
             "stars": 0,
+            "poops": 0,
             "last_daily": 0,
             "last_rob": 0,
             "last_beg": 0,
@@ -112,10 +143,8 @@ def ensure_user_coins(user_id):
                 "last_trade_ts": {},
                 "daily": {"day": "", "count": 0}
             },
-            "star_meta": {
-                "day": _today_key(),
-                "given": {}
-            }
+            "star_meta": _fresh_reaction_meta(),
+            "poop_meta": _fresh_reaction_meta(),
         }
         save_coins(coins)
     else:
@@ -126,6 +155,7 @@ def ensure_user_coins(user_id):
             "wallet": 100,
             "bank": 0,
             "stars": 0,
+            "poops": 0,
             "last_daily": 0,
             "last_rob": 0,
             "last_beg": 0,
@@ -137,10 +167,8 @@ def ensure_user_coins(user_id):
                 "last_trade_ts": {},
                 "daily": {"day": "", "count": 0}
             },
-            "star_meta": {
-                "day": _today_key(),
-                "given": {}
-            }
+            "star_meta": _fresh_reaction_meta(),
+            "poop_meta": _fresh_reaction_meta(),
         }
 
         for key, value in defaults.items():
@@ -152,21 +180,10 @@ def ensure_user_coins(user_id):
             data["active_effects"] = {}
             changed = True
 
-        if not isinstance(data.get("star_meta"), dict):
-            data["star_meta"] = {
-                "day": _today_key(),
-                "given": {}
-            }
+        if _ensure_reaction_meta(data, "star_meta"):
             changed = True
 
-        data["star_meta"].setdefault("day", _today_key())
-        data["star_meta"].setdefault("given", {})
-
-        if data["star_meta"]["day"] != _today_key():
-            data["star_meta"] = {
-                "day": _today_key(),
-                "given": {}
-            }
+        if _ensure_reaction_meta(data, "poop_meta"):
             changed = True
 
         if changed:
@@ -228,7 +245,23 @@ class Listeners(commands.Cog):
         if user.bot:
             return
 
-        if str(reaction.emoji) not in STAR_REACTION_EMOJIS:
+        emoji = str(reaction.emoji)
+
+        if emoji in STAR_REACTION_EMOJIS:
+            count_key = "stars"
+            meta_key = "star_meta"
+            title = "⭐  Golden Star"
+            label = "golden star"
+            total_label = "✦ Stars"
+            color = EMBED_COLOR
+        elif emoji in POOP_REACTION_EMOJIS:
+            count_key = "poops"
+            meta_key = "poop_meta"
+            title = "💩  Poop"
+            label = "poop"
+            total_label = "💩 Poops"
+            color = C.SWEAR
+        else:
             return
 
         message = reaction.message
@@ -252,33 +285,29 @@ class Listeners(commands.Cog):
         giver = coins[str(user.id)]
         receiver = coins[str(message.author.id)]
 
-        giver.setdefault("star_meta", {"day": _today_key(), "given": {}})
-        giver["star_meta"].setdefault("day", _today_key())
-        giver["star_meta"].setdefault("given", {})
+        giver.setdefault(count_key, 0)
+        receiver.setdefault(count_key, 0)
 
-        if giver["star_meta"]["day"] != _today_key():
-            giver["star_meta"] = {
-                "day": _today_key(),
-                "given": {}
-            }
+        _ensure_reaction_meta(giver, meta_key)
 
         target_key = str(message.author.id)
-        given_today = int(giver["star_meta"]["given"].get(target_key, 0))
+        given_today = int(giver[meta_key]["given"].get(target_key, 0))
 
         if given_today >= 2:
             return
 
-        giver["star_meta"]["given"][target_key] = given_today + 1
-        receiver["stars"] = int(receiver.get("stars", 0)) + 1
+        giver[meta_key]["given"][target_key] = given_today + 1
+        receiver[count_key] = int(receiver.get(count_key, 0)) + 1
 
         save_coins(coins)
 
         try:
             await message.channel.send(
                 embed=make_embed(
-                    "⭐  Golden Star",
-                    f"{message.author.mention} got a **golden star** from {user.mention}.\n"
-                    f"✦ Stars: **{receiver['stars']}**"
+                    title,
+                    f"{message.author.mention} got a **{label}** from {user.mention}.\n"
+                    f"{total_label}: **{receiver[count_key]}**",
+                    color=color,
                 ),
                 delete_after=3
             )

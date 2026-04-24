@@ -113,25 +113,26 @@ def _week_key() -> str:
     return f"{now.year}-W{now.isocalendar()[1]}"
 
 
-def _reset_star_meta_if_needed(user: dict):
-    user.setdefault("stars", 0)
-    user.setdefault("star_meta", {"day": _today_key(), "given": {}})
-    if not isinstance(user["star_meta"], dict):
-        user["star_meta"] = {"day": _today_key(), "given": {}}
-    user["star_meta"].setdefault("day", _today_key())
-    user["star_meta"].setdefault("given", {})
-    if user["star_meta"]["day"] != _today_key():
-        user["star_meta"] = {"day": _today_key(), "given": {}}
+def _reset_reaction_meta_if_needed(user: dict, count_key: str, meta_key: str):
+    user.setdefault(count_key, 0)
+    user.setdefault(meta_key, {"day": _today_key(), "given": {}})
+    if not isinstance(user[meta_key], dict):
+        user[meta_key] = {"day": _today_key(), "given": {}}
+    user[meta_key].setdefault("day", _today_key())
+    user[meta_key].setdefault("given", {})
+    if user[meta_key]["day"] != _today_key():
+        user[meta_key] = {"day": _today_key(), "given": {}}
 
 
 def ensure_user(coins, user_id):
     uid = str(user_id)
     defaults = {
         "wallet": 100, "bank": 0, "debt": 0, "debt_since": 0,
-        "stars": 0, "last_daily": 0, "last_beg": 0,
+        "stars": 0, "poops": 0, "last_daily": 0, "last_beg": 0,
         "last_rob": 0, "last_bankrob": 0, "last_work": 0,
         "active_effects": {},
         "star_meta": {"day": _today_key(), "given": {}},
+        "poop_meta": {"day": _today_key(), "given": {}},
         # Career fields
         "career_field": None,
         "career_tier": 0,
@@ -144,7 +145,8 @@ def ensure_user(coins, user_id):
     else:
         for k, v in defaults.items():
             coins[uid].setdefault(k, v)
-        _reset_star_meta_if_needed(coins[uid])
+        _reset_reaction_meta_if_needed(coins[uid], "stars", "star_meta")
+        _reset_reaction_meta_if_needed(coins[uid], "poops", "poop_meta")
     return coins[uid]
 
 
@@ -260,6 +262,7 @@ class Economy(commands.Cog):
             ("Wallet", f"{user['wallet']:,}"),
             ("QMBank", f"{user['bank']:,}"),
             ("Stars",  f"{user['stars']:,}"),
+            ("Poops",  f"{user['poops']:,}"),
             ("Total",  f"{total:,}"),
         ]
         if debt > 0:
@@ -624,7 +627,7 @@ class Economy(commands.Cog):
         coins    = load_coins()
         giver    = ensure_user(coins, ctx.author.id)
         receiver = ensure_user(coins, member.id)
-        _reset_star_meta_if_needed(giver)
+        _reset_reaction_meta_if_needed(giver, "stars", "star_meta")
         key         = str(member.id)
         given_today = int(giver["star_meta"]["given"].get(key, 0))
         if given_today >= 2:
@@ -660,6 +663,53 @@ class Economy(commands.Cog):
             medal  = medals[i] if i < 3 else f"{i+1}."
             lines.append(f"{medal}  **{name}** — `{data.get('stars',0):,}` {E.STAR}{you}")
         e = embed(f"{E.TROPHY}  Star Leaderboard", "\n".join(lines) or "No data.", C.TRIVIA)
+        await ctx.send(embed=e)
+
+    @commands.hybrid_command(name="poop", description="Give someone a poop.")
+    async def poop(self, ctx, member: discord.Member):
+        if member == ctx.author:
+            return await ctx.send(embed=error("Poop", "Can't poop yourself."))
+        if member.bot:
+            return await ctx.send(embed=error("Poop", "Bots don't collect poops."))
+        coins    = load_coins()
+        giver    = ensure_user(coins, ctx.author.id)
+        receiver = ensure_user(coins, member.id)
+        _reset_reaction_meta_if_needed(giver, "poops", "poop_meta")
+        key         = str(member.id)
+        given_today = int(giver["poop_meta"]["given"].get(key, 0))
+        if given_today >= 2:
+            return await ctx.send(embed=warn("Limit Reached",
+                f"You've already given 2 poops to {member.mention} today."))
+        giver["poop_meta"]["given"][key] = given_today + 1
+        receiver["poops"] += 1
+        save_coins(coins)
+        e = embed(f"{E.POOP}  Poop Given!",
+                  f"{ctx.author.mention} gave {member.mention} a poop!", C.SWEAR)
+        e.add_field(name=f"{member.display_name}'s Poops", value=f"`{receiver['poops']:,}` {E.POOP}", inline=False)
+        await ctx.send(embed=e)
+
+    @commands.hybrid_command(name="poops", description="Check poops.")
+    async def poops(self, ctx, member: discord.Member = None):
+        member = member or ctx.author
+        coins  = load_coins()
+        user   = ensure_user(coins, member.id)
+        e = embed(f"{E.POOP}  {member.display_name}'s Poops", f"**{user['poops']:,}** poops", C.SWEAR)
+        e.set_thumbnail(url=member.display_avatar.url)
+        await ctx.send(embed=e)
+
+    @commands.hybrid_command(name="poopleaderboard", description="Poop leaderboard.")
+    async def poopleaderboard(self, ctx):
+        coins = load_coins()
+        board = sorted(coins.items(), key=lambda x: int(x[1].get("poops", 0)), reverse=True)[:10]
+        medals = ["🥇", "🥈", "🥉"]
+        lines  = []
+        for i, (uid, data) in enumerate(board):
+            member = ctx.guild.get_member(int(uid)) if ctx.guild else None
+            name   = (member.display_name if member else f"User {uid}")[:20]
+            you    = "  ← you" if int(uid) == ctx.author.id else ""
+            medal  = medals[i] if i < 3 else f"{i+1}."
+            lines.append(f"{medal}  **{name}** — `{data.get('poops',0):,}` {E.POOP}{you}")
+        e = embed(f"{E.TROPHY}  Poop Leaderboard", "\n".join(lines) or "No data.", C.SWEAR)
         await ctx.send(embed=e)
 
     @commands.hybrid_command(name="baltop", description="Richest users leaderboard.")

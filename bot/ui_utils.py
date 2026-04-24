@@ -39,6 +39,7 @@ class E:
     COIN      = "🪙"
     BANK      = "🏦"
     STAR      = "⭐"
+    POOP      = "💩"
     WALLET    = "👛"
     CHART     = "📈"
     CHART_DN  = "📉"
